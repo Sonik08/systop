@@ -1,14 +1,17 @@
-const { app, BrowserWindow, Menu, ipcMain } = require('electron')
-const log = require('electron-log')
+const path = require('path')
+const { app, Menu, ipcMain, Tray } = require('electron')
 const Store = require('./store')
+const MainWindow = require('./main-window')
+const AppTray = require('./app-tray')
 
 // Set env
-process.env.NODE_ENV = 'development'
+process.env.NODE_ENV = 'production'
 
 const isDev = process.env.NODE_ENV !== 'production' ? true : false
 const isMac = process.platform === 'darwin' ? true : false
 
 let mainWindow
+let tray
 const store = new Store({
   configName: 'user-settings',
   defaults: {
@@ -21,25 +24,7 @@ const store = new Store({
 function createMainWindow() {
 
   
-  mainWindow = new BrowserWindow({
-    title: 'APP NAME',
-    width: isDev ? 800 : 355,
-    height: 550,
-    icon: `${__dirname}/assets/icons/icon.png`,
-    resizable: isDev ? true : false,
-    backgroundColor: 'white',
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      enableRemoteModule: true
-    },
-  })
-
-  if (isDev) {
-    mainWindow.webContents.openDevTools()
-  }
-
-  mainWindow.loadFile('./app/index.html')
+  mainWindow = new MainWindow('./app/index.html', isDev)
 }
 
 app.on('ready', () => {
@@ -51,12 +36,36 @@ app.on('ready', () => {
 
   const mainMenu = Menu.buildFromTemplate(menu)
   Menu.setApplicationMenu(mainMenu)
+
+  mainWindow.on('close', e => {
+    if(!app.isQuitting){
+      e.preventDefault()
+      mainWindow.hide()
+    }
+
+    return true
+  })
+
+  const icon = path.join(__dirname, 'assets', 'icons', 'tray_icon.png')
+
+  tray = new AppTray(icon, mainWindow)
+
+  mainWindow.on('ready', () => (mainWindow = null))
 })
 
 const menu = [
   ...(isMac ? [{ role: 'appMenu' }] : []),
   {
     role: 'fileMenu',
+  },
+  {
+    label: 'View',
+    submenu: [
+      {
+        label: 'Toggle Navigation',
+        click: () => mainWindow.webContents.send('nav:toggle'),
+      }
+    ]
   },
   ...(isDev
     ? [
